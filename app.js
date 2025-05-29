@@ -106,20 +106,37 @@ app.get("/scores/check", (req, res) =>{
     
 })
 
-app.post("/lectureMaterials/upload", uploadLectureMaterials.array("lectureMaterials", 30), (req, res) => {
-    for(const file of req.files){
-        const fileBuffer = fs.readFileSync(file.path);
-        const subFiles = splitPDF(file.path, 25);
-        const fileName = path.parse(file.path).name;
+// My code: endpoint to generate exam questions based on lecture materials
+app.post("/lectureMaterials/upload", uploadLectureMaterials.array("lectureMaterials", 30), async (req, res) => {
+    try {
+        const filePaths = [];
+        const questionSettings = {};
 
-        const formData = new FormData();
+        for (let i = 0; i < req.files.length; i++) {
+            const file = req.files[i];
+            const fileName = path.basename(file.path);
 
-        for(let i = 0; i<subFiles; i++){
-            formData.append('__TBD__', fs.createReadStream(`./${fileName}_chunks/chunk_${i + 1}.pdf`))
+            filePaths.push(fileName);
+            questionSettings[i + 1] = { mcq: 3, tf: 2, sa: 1, num: 0 };
         }
-        ////Making post request to exam generator moduler
+
+        const response = await axios.post("https://daic-ai-got-this.onrender.com/generate_exam", {
+            file_paths: filePaths,
+            detail_level: "short",
+            question_settings: questionSettings
+        });
+
+        if (response.status !== 200) {
+            throw new Error("Failed to generate exam questions");
+        }
+
+        res.status(200).json({ message: "Exam generated successfully", exam: response.data });
+    } catch (error) {
+        console.error("Exam generation error:", error);
+        res.status(500).json({ error: error.message });
     }
-})
+});
+
 
 app.post("/users", (req, res) =>{
     db.run("INSERT INTO users (id, name, email, password) values (?, ?, ?, ?)", [req.body.id, req.body.name, req.body.email, req.body.password], (err) =>{
